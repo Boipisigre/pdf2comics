@@ -1,6 +1,6 @@
 # PDF to CBZ Converter (AVIF)
 
-This Python script converts one or multiple PDF files into CBZ archives using AVIF image format for comic book optimization.
+This Python script converts one or multiple PDF files into CBZ archives using AVIF image format for comic book file size optimization.
 
 ## Features
 
@@ -32,20 +32,20 @@ Make sure ImageMagick is installed and accessible via command line (e.g., `conve
 ### Single PDF File
 
 ```bash
-./pdftocbz_fusion.py <quality> <input.pdf> <output.cbz> <width> <height>
+./pdftocbz <quality> <width> <height> <input.pdf> <output.cbz>
 ```
 
 ### Directory of PDFs
 
 ```bash
-./pdftocbz_fusion.py <quality> <input_folder> <output_folder> <width> <height>
+./pdftocbz <quality>  <width> <height> <input_folder> <output_folder>
 ```
 
 ### Example
 
 ```bash
-./pdftocbz_fusion.py 90 book.pdf output.cbz 1600 2560
-./pdftocbz_fusion.py 85 books/ cbz_output/ 1024 1600
+./pdftocbz 50  1600 2560 book.pdf output.cbz
+./pdftocbz 60  1024 1600 books/ cbz_output/
 ```
 
 ## Output
