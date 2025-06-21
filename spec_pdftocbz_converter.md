@@ -18,20 +18,21 @@ Ce script permet de convertir un ou plusieurs fichiers PDF en fichiers CBZ, en c
 ## Utilisation
 
 ```bash
-./pdftocbz_fusion.py <qualité> <chemin_entrée> <chemin_sortie> <largeur> <hauteur>
+./pdftocbz <qualité> < <largeur> <hauteur> chemin_entrée> <chemin_sortie>
 ```
 
 ### Paramètres
 
 1. **qualité** : Entier de 1 à 100, définit la qualité de compression AVIF.
+4. **largeur** : Largeur cible des images.
+5. **hauteur** : Hauteur cible des images.
 2. **chemin\_entrée** :
    - Fichier PDF unique.
    - Ou répertoire contenant des fichiers PDF.
 3. **chemin\_sortie** :
    - Fichier `.cbz` si entrée est un fichier.
    - Répertoire si entrée est un dossier.
-4. **largeur** : Largeur cible des images.
-5. **hauteur** : Hauteur cible des images.
+
 
 ## Détails de traitement
 
@@ -70,7 +71,6 @@ Un tableau affiché en fin de script contient :
 ## Exemple
 
 ```bash
-./pdftocbz_fusion.py 90 livre.pdf sortie.cbz 1600 2560
-./pdftocbz_fusion.py 85 docs/ cbz_output/ 1024 1600
+./pdftocbz 90  1600 2560 livre.pdf sortie.cbz
+./pdftocbz 85 1024 1600  docs/ cbz_output/
 ```
-
