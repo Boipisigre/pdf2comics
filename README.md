@@ -23,6 +23,7 @@ This Python script converts one or multiple PDF files into CBZ archives using AV
 
 ```bash
 pip install -r requirements.txt
+pipenv install -r requirements.txt
 ```
 
 Make sure ImageMagick is installed and accessible via command line (e.g., `convert`, `magick`).
