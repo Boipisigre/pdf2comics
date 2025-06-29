@@ -100,12 +100,12 @@ def convert_directory(pdf_dir, output_dir, quality, width, height):
             stats.append(stat)
     return stats
 
-def afficher_tableau(stats, log_file=None):
-    header = f"{'Fichier':<30} {'Pages':>6} {'Taille init. (Ko)':>18} {'Taille finale (Ko)':>20} {'Temps (s)':>12}\n"
-    separator = "-" * 94 + "\n"
+def afficher_tableau(stats, log_file=None, quality=None, width=None, height=None):
+    header = "Fichier\tPages\tTaille_init_Ko\tTaille_finale_Ko\tTemps_s"
+    separator = "\n"
     lignes = [header, separator]
     for s in stats:
-        ligne = f"{s['fichier']:<30} {s['pages']:>6} {s['taille_init']/1024:>18.1f} {s['taille_finale']/1024:>20.1f} {s['temps']:>12.2f}\n"
+        ligne = f"{s['fichier']}\t{s['pages']}\t{s['taille_init']/1024:.1f}\t{s['taille_finale']/1024:.1f}\t{s['temps']:.2f}\n"
         lignes.append(ligne)
     lignes.append(separator)
 
@@ -115,6 +115,8 @@ def afficher_tableau(stats, log_file=None):
         with open(log_file, "w", encoding="utf-8") as f:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"Rapport de conversion - {now}\n")
+            if quality is not None and width is not None and height is not None:
+                f.write(f"Paramètres du traitement : Qualité={quality}, Largeur={width}, Hauteur={height}\n\n")
             f.writelines(lignes)
         print(f"\nStatistiques enregistrées dans : {log_file}")
 
@@ -144,4 +146,4 @@ if __name__ == "__main__":
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"conversion_stats_{timestamp}.txt"
-    afficher_tableau(stats, log_filename)
+    afficher_tableau(stats, log_filename, quality=args.quality, width=args.width, height=args.height)

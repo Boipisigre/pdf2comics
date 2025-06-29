@@ -1,7 +1,0 @@
-Rapport de conversion - 2025-06-18 17:54:02
-Fichier                         Pages  Taille init. (Ko)   Taille finale (Ko)    Temps (s)
-----------------------------------------------------------------------------------------------
-Manara - Christophe Colomb [FRA].pdf    105            35926.4              13546.8        89.84
-Manara - Click 2 - Le declic 2 [FRA].pdf     65            28271.3               9244.7        52.82
-Manara - Click 1 - Le Declic [FRA].pdf     46            32007.4               7614.7        41.12
-----------------------------------------------------------------------------------------------
