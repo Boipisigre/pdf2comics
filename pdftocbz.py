@@ -22,6 +22,9 @@ import argparse
 import time
 import shutil
 from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
+import tempfile
 
 def gestion_extension(fichier, ext):
     return os.path.splitext(fichier)[0] + ext
@@ -49,26 +52,36 @@ def extraire_image_pdf(page, doc, img_jpeg):
 
 def pdf_to_cbz(input_pdf, output_cbz, quality, width, height):
     start_time = time.time()
-    temp_dir = "temp_images"
-    os.makedirs(temp_dir, exist_ok=True)
-    img_jpeg = os.path.join(temp_dir, "tempo.jpeg")
+    temp_dir = tempfile.mkdtemp(prefix="cbz_temp_")
     output_cbz = gestion_extension(output_cbz, ".cbz")
-
     doc = fitz.open(input_pdf)
     image_avif = []
 
     for page_index, page in enumerate(doc):
-        extraire_image_pdf(page, doc, img_jpeg)
-        avif_path = convertir_et_enregistrer_avif(img_jpeg, page_index + 1, quality, width, height, temp_dir)
+        page_num = page_index + 1
+        # Temp JPEG unique pour chaque page
+        with tempfile.NamedTemporaryFile(suffix=".jpeg", delete=False, dir=temp_dir) as tmp_jpeg:
+            img_jpeg = tmp_jpeg.name
+
+        image_list = page.get_images(full=True)
+        if image_list and len(image_list) == 1:
+            xref = image_list[0][0]
+            image_bytes = doc.extract_image(xref)["image"]
+            with open(img_jpeg, "wb") as f:
+                f.write(image_bytes)
+        else:
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            pix.save(img_jpeg)
+
+        avif_path = convertir_et_enregistrer_avif(img_jpeg, page_num, quality, width, height, temp_dir)
         image_avif.append(avif_path)
+        os.remove(img_jpeg)
 
     with zipfile.ZipFile(output_cbz, "w", zipfile.ZIP_DEFLATED) as cbz:
         for img in sorted(image_avif):
             cbz.write(img, os.path.basename(img))
             os.remove(img)
 
-    if os.path.exists(img_jpeg):
-        os.remove(img_jpeg)
     shutil.rmtree(temp_dir)
 
     return {
@@ -78,15 +91,29 @@ def pdf_to_cbz(input_pdf, output_cbz, quality, width, height):
         "taille_finale": os.path.getsize(output_cbz),
         "temps": time.time() - start_time
     }
-
-def convert_directory(pdf_dir, output_dir, quality, width, height):
+def convert_directory(pdf_dir, output_dir, quality, width, height, max_workers=None):
     os.makedirs(output_dir, exist_ok=True)
     stats = []
-    for f in os.listdir(pdf_dir):
-        if f.lower().endswith(".pdf"):
-            pdf_path = os.path.join(pdf_dir, f)
-            cbz_path = os.path.join(output_dir, gestion_extension(f, ".cbz"))
-            stats.append(pdf_to_cbz(pdf_path, cbz_path, quality, width, height))
+
+    def worker(pdf_filename):
+        if not pdf_filename.lower().endswith(".pdf"):
+            return None
+        input_pdf = os.path.join(pdf_dir, pdf_filename)
+        output_cbz = os.path.join(output_dir, gestion_extension(pdf_filename, ".cbz"))
+        try:
+            return pdf_to_cbz(input_pdf, output_cbz, quality, width, height)
+        except Exception as e:
+            print(f"Erreur sur {pdf_filename} : {e}")
+            return None
+
+    pdf_files = [f for f in os.listdir(pdf_dir) if f.lower().endswith(".pdf")]
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(worker, f): f for f in pdf_files}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                stats.append(result)
+
     return stats
 
 def afficher_tableau(stats, log_file=None, quality=None, width=None, height=None):
@@ -114,6 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("input_path", type=str, help="Fichier PDF ou dossier contenant des PDFs")
     parser.add_argument("output_path", type=str, help="Nom du fichier CBZ ou dossier de sortie")
     parser.add_argument("output_log",  nargs='?', type=str, help="Nom du fichier de statistiques")
+    parser.add_argument("--threads", type=int, default=None, help="Nombre de threads pour traiter les PDFs en parallèle")
 
     args = parser.parse_args()
     stats = []
@@ -126,7 +154,7 @@ if __name__ == "__main__":
         if not os.path.isdir(args.output_path):
             print("Erreur : si l'entrée est un dossier, la sortie doit l'être aussi.")
             exit(2)
-        stats = convert_directory(args.input_path, args.output_path, args.quality, args.width, args.height)
+        stats = convert_directory(args.input_path, args.output_path, args.quality, args.width, args.height , max_workers=args.threads)
     else:
         os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
         stats.append(pdf_to_cbz(args.input_path, args.output_path, args.quality, args.width, args.height))
