@@ -12,7 +12,7 @@ Utilisation :
 - Fichier unique : ./pdftocbz_fusion.py 90  1600 2560 monfichier.pdf sortie.cbz [logfile]
 - Répertoire     : ./pdftocbz_fusion.py 90  1600 2560 dossier_pdf dossier_cbz [logfile]
 """
-
+#!/usr/bin/env python3
 import fitz  # PyMuPDF
 from wand.image import Image
 from wand.color import Color
@@ -23,20 +23,29 @@ import time
 import shutil
 from datetime import datetime
 
-def gestion_extension(fichier,ext):
-    nom_sans_ext, _ = os.path.splitext(fichier)
-    return nom_sans_ext + ext
+def gestion_extension(fichier, ext):
+    return os.path.splitext(fichier)[0] + ext
 
-
-def convert_avif(file_tempo, page_imp, quality, width, height, tempo, image_avif):
-    with Image(filename=file_tempo) as img:
+def convertir_et_enregistrer_avif(img_jpeg, page_num, quality, width, height, temp_dir):
+    with Image(filename=img_jpeg) as img:
         img.background_color = Color("white")
         img.alpha_channel = "remove"
         img.compression_quality = quality
         img.resize(width, height)
-        img_avif = os.path.join(tempo, f"page_{page_imp:03}.avif")
-        img.save(filename=img_avif)
-        image_avif.append(img_avif)
+        avif_path = os.path.join(temp_dir, f"page_{page_num:03}.avif")
+        img.save(filename=avif_path)
+        return avif_path
+
+def extraire_image_pdf(page, doc, img_jpeg):
+    images = page.get_images(full=True)
+    if images and len(images) == 1:
+        xref = images[0][0]
+        image_data = doc.extract_image(xref)["image"]
+        with open(img_jpeg, "wb") as f:
+            f.write(image_data)
+    else:
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        pix.save(img_jpeg)
 
 def pdf_to_cbz(input_pdf, output_cbz, quality, width, height):
     start_time = time.time()
@@ -44,84 +53,56 @@ def pdf_to_cbz(input_pdf, output_cbz, quality, width, height):
     os.makedirs(temp_dir, exist_ok=True)
     img_jpeg = os.path.join(temp_dir, "tempo.jpeg")
     output_cbz = gestion_extension(output_cbz, ".cbz")
+
     doc = fitz.open(input_pdf)
     image_avif = []
-    num_pages = len(doc)
 
-    print(f"Traitement du fichier {input_pdf} avec {num_pages} pages")
-
-    for page_index in range(num_pages):
-        page = doc[page_index]
-        image_list = page.get_images(full=True)
-        page_imp = page_index + 1
-
-        if image_list and len(image_list) == 1:
-            xref = image_list[0][0]
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
-            with open(img_jpeg, "wb") as img_file:
-                img_file.write(image_bytes)
-            convert_avif(img_jpeg, page_imp, quality, width, height, temp_dir, image_avif)
-        else:
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            pix.save(img_jpeg)
-            convert_avif(img_jpeg, page_imp, quality, width, height, temp_dir, image_avif)
+    for page_index, page in enumerate(doc):
+        extraire_image_pdf(page, doc, img_jpeg)
+        avif_path = convertir_et_enregistrer_avif(img_jpeg, page_index + 1, quality, width, height, temp_dir)
+        image_avif.append(avif_path)
 
     with zipfile.ZipFile(output_cbz, "w", zipfile.ZIP_DEFLATED) as cbz:
-        for img_file in sorted(image_avif):
-            cbz.write(img_file, os.path.basename(img_file))
-            os.remove(img_file)
+        for img in sorted(image_avif):
+            cbz.write(img, os.path.basename(img))
+            os.remove(img)
 
     if os.path.exists(img_jpeg):
         os.remove(img_jpeg)
     shutil.rmtree(temp_dir)
 
-    duration = time.time() - start_time
-    size_before = os.path.getsize(input_pdf)
-    size_after = os.path.getsize(output_cbz)
-
     return {
         "fichier": os.path.basename(input_pdf),
-        "pages": num_pages,
-        "taille_init": size_before,
-        "taille_finale": size_after,
-        "temps": duration
+        "pages": len(doc),
+        "taille_init": os.path.getsize(input_pdf),
+        "taille_finale": os.path.getsize(output_cbz),
+        "temps": time.time() - start_time
     }
 
 def convert_directory(pdf_dir, output_dir, quality, width, height):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    elif not os.path.isdir(output_dir):
-        print("Erreur : Le chemin de sortie doit être un dossier.")
-        exit(1)
-
+    os.makedirs(output_dir, exist_ok=True)
     stats = []
-    for filename in os.listdir(pdf_dir):
-        if filename.lower().endswith(".pdf"):
-            pdf_path = os.path.join(pdf_dir, filename)
-            cbz_name = os.path.splitext(filename)[0] + ".cbz"
-            output_cbz = os.path.join(output_dir, cbz_name)
-            stat = pdf_to_cbz(pdf_path, output_cbz, quality, width, height)
-            stats.append(stat)
+    for f in os.listdir(pdf_dir):
+        if f.lower().endswith(".pdf"):
+            pdf_path = os.path.join(pdf_dir, f)
+            cbz_path = os.path.join(output_dir, gestion_extension(f, ".cbz"))
+            stats.append(pdf_to_cbz(pdf_path, cbz_path, quality, width, height))
     return stats
 
 def afficher_tableau(stats, log_file=None, quality=None, width=None, height=None):
-    header = "Fichier\tPages\tTaille_init_Ko\tTaille_finale_Ko\tTemps_s"
-    separator = "\n"
-    lignes = [header, separator]
+    lignes = ["Fichier\tPages\tTaille_init_Ko\tTaille_finale_Ko\tTemps_s\n", "\n"]
     for s in stats:
-        ligne = f"{s['fichier']}\t{s['pages']}\t{s['taille_init']/1024:.1f}\t{s['taille_finale']/1024:.1f}\t{s['temps']:.2f}\n"
-        lignes.append(ligne)
-    lignes.append(separator)
-
+        lignes.append(f"{s['fichier']}\t{s['pages']}\t{s['taille_init']/1024:.1f}\t{s['taille_finale']/1024:.1f}\t{s['temps']:.2f}\n")
+    lignes.append("\n")
     print("Résumé des conversions :\n" + "".join(lignes))
-    log_file= gestion_extension(log_file,".csv")
+
     if log_file:
+        log_file = gestion_extension(log_file, ".csv")
         with open(log_file, "a", encoding="utf-8") as f:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"Rapport de conversion - {now}\n")
-            if quality is not None and width is not None and height is not None:
-                f.write(f"Paramètres du traitement : Qualité={quality}, Largeur={width}, Hauteur={height}\n\n")
+            if quality and width and height:
+                f.write(f"Paramètres : Qualité={quality}, Largeur={width}, Hauteur={height}\n\n")
             f.writelines(lignes)
         print(f"\nStatistiques enregistrées dans : {log_file}")
 
@@ -134,31 +115,22 @@ if __name__ == "__main__":
     parser.add_argument("output_path", type=str, help="Nom du fichier CBZ ou dossier de sortie")
     parser.add_argument("output_log",  nargs='?', type=str, help="Nom du fichier de statistiques")
 
-
     args = parser.parse_args()
     stats = []
+
     if not os.path.exists(args.input_path):
         print("Erreur : L'entrée n'existe pas")
         exit(1)
+
     if os.path.isdir(args.input_path):
         if not os.path.isdir(args.output_path):
-            print("Erreur : lorsque l'entrée est un dossier, la sortie doit être un dossier.")
+            print("Erreur : si l'entrée est un dossier, la sortie doit l'être aussi.")
             exit(2)
         stats = convert_directory(args.input_path, args.output_path, args.quality, args.width, args.height)
     else:
-        output_dir = os.path.dirname(args.output_path)
-        if output_dir and not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        stat = pdf_to_cbz(args.input_path, args.output_path, args.quality, args.width, args.height)
-        stats.append(stat)
+        os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
+        stats.append(pdf_to_cbz(args.input_path, args.output_path, args.quality, args.width, args.height))
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if not args.output_log :
-        log_filename = f"conversion_stats_{timestamp}.csv"
-    else:
-        log_dir = os.path.dirname(args.output_log)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        log_filename = args.output_log
-
-    afficher_tableau(stats, log_filename, quality=args.quality, width=args.width, height=args.height)
+    log_name = args.output_log or f"conversion_stats_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    os.makedirs(os.path.dirname(log_name), exist_ok=True) if os.path.dirname(log_name) else None
+    afficher_tableau(stats, log_name, args.quality, args.width, args.height)
