@@ -9,8 +9,8 @@ Fonctionnalités :
 - Journalise les statistiques dans un fichier daté.
 
 Utilisation :
-- Fichier unique : ./pdftocbz_fusion.py 90 monfichier.pdf sortie.cbz 1600 2560
-- Répertoire     : ./pdftocbz_fusion.py 90 dossier_pdf dossier_cbz 1600 2560
+- Fichier unique : ./pdftocbz_fusion.py 90  1600 2560 monfichier.pdf sortie.cbz [logfile]
+- Répertoire     : ./pdftocbz_fusion.py 90  1600 2560 dossier_pdf dossier_cbz [logfile]
 """
 
 import fitz  # PyMuPDF
@@ -22,6 +22,11 @@ import argparse
 import time
 import shutil
 from datetime import datetime
+
+def gestion_extension(fichier,ext):
+    nom_sans_ext, _ = os.path.splitext(fichier)
+    return nom_sans_ext + ext
+
 
 def convert_avif(file_tempo, page_imp, quality, width, height, tempo, image_avif):
     with Image(filename=file_tempo) as img:
@@ -38,7 +43,7 @@ def pdf_to_cbz(input_pdf, output_cbz, quality, width, height):
     temp_dir = "temp_images"
     os.makedirs(temp_dir, exist_ok=True)
     img_jpeg = os.path.join(temp_dir, "tempo.jpeg")
-
+    output_cbz = gestion_extension(output_cbz, ".cbz")
     doc = fitz.open(input_pdf)
     image_avif = []
     num_pages = len(doc)
@@ -110,9 +115,9 @@ def afficher_tableau(stats, log_file=None, quality=None, width=None, height=None
     lignes.append(separator)
 
     print("Résumé des conversions :\n" + "".join(lignes))
-
+    log_file= gestion_extension(log_file,".csv")
     if log_file:
-        with open(log_file, "w", encoding="utf-8") as f:
+        with open(log_file, "a", encoding="utf-8") as f:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"Rapport de conversion - {now}\n")
             if quality is not None and width is not None and height is not None:
@@ -127,15 +132,18 @@ if __name__ == "__main__":
     parser.add_argument("height", type=int, help="Hauteur de redimensionnement")
     parser.add_argument("input_path", type=str, help="Fichier PDF ou dossier contenant des PDFs")
     parser.add_argument("output_path", type=str, help="Nom du fichier CBZ ou dossier de sortie")
+    parser.add_argument("output_log",  nargs='?', type=str, help="Nom du fichier de statistiques")
 
 
     args = parser.parse_args()
     stats = []
-
+    if not os.path.exists(args.input_path):
+        print("Erreur : L'entrée n'existe pas")
+        exit(1)
     if os.path.isdir(args.input_path):
         if not os.path.isdir(args.output_path):
             print("Erreur : lorsque l'entrée est un dossier, la sortie doit être un dossier.")
-            exit(1)
+            exit(2)
         stats = convert_directory(args.input_path, args.output_path, args.quality, args.width, args.height)
     else:
         output_dir = os.path.dirname(args.output_path)
@@ -145,5 +153,12 @@ if __name__ == "__main__":
         stats.append(stat)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"conversion_stats_{timestamp}.txt"
+    if not args.output_log :
+        log_filename = f"conversion_stats_{timestamp}.csv"
+    else:
+        log_dir = os.path.dirname(args.output_log)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        log_filename = args.output_log
+
     afficher_tableau(stats, log_filename, quality=args.quality, width=args.width, height=args.height)
