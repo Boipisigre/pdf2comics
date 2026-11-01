@@ -56,7 +56,7 @@ Assurez-vous que ImageMagick est installé et accessible en ligne de commande (p
   - Nom du fichier
   - Nombre de pages
   - Taille de l'entrée/sortie
-  - Temps de conversion
+  - Le Temps de conversion
 
 ## Licence
 
